@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head><title>Chat Room</title></head>
+<body>
+    <h1>Chat Room</h1>
+    {% if user.is_authenticated %}
+        <p>Logged in as: <strong>{{ user.username }}</strong></p>
+        <form action="{% url 'logout' %}" method="post">
+            {% csrf_token %}
+            <button type="submit">Logout</button>
+        </form>
+        <hr>
+        <div id="messages"></div>
+        <script>
+            const socket = new WebSocket('ws://' + window.location.host + '/ws/socket-server/');
+            socket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+                const msg = document.createElement('p');
+                msg.innerText = data.message;
+                msg.style.color = 'green';
+                document.querySelector('#messages').appendChild(msg);
+            };
+        </script>
+    {% else %}
+        <p>Please <a href="{% url 'login' %}">Login</a> to join.</p>
+    {% endif %}
+</body>
+</html>
