@@ -45,3 +45,20 @@ This project is a real-time chat application built using **Django** and **Channe
     * Refactored the frontend file structure by establishing a dedicated `registration` directory for `login.html` and `register.html`, aligning perfectly with Django's built-in auth framework requirements.
 * **Version Control**:
     * Committed and pushed the finalized, fully functional Week 3 milestone (complete with bug fixes and secure routing) to the GitHub repository.
+
+    # Week 4: Authentication & User Management Enhancements
+
+## 📝 Project Overview
+This week focused on hardening the security and accessibility of the real-time chat application. By implementing a mandatory email registration system and a full password recovery workflow, the application now provides a professional-grade user management experience without administrative hierarchy.
+
+## 🚀 Key Accomplishments
+* **Custom Registration Flow**: Updated the `register` view to use a custom form (`UserRegisterForm`) that forces users to provide an email address, ensuring account recoverability.
+* **Password Reset Integration**: Leveraged Django's built-in authentication system to handle the four-stage password reset process (Request, Email Sent, Link Confirmation, and Success).
+* **Console Email Backend**: Configured a local development email backend that outputs password reset links directly to the VS Code terminal for testing.
+* **Generalized User Permissions**: Maintained a flat access model where any registered user can create chat rooms and join conversations, removing superuser dependencies for core features.
+* **UI/UX Improvements**: Developed a dedicated `registration/` template directory including login, registration, and all password reset state pages.
+
+## 🛠 Technical Stack Updated
+* **Backend**: Django 6.0.3
+* **Real-time**: Django Channels & Daphne
+* **Auth**: Django contrib auth with custom Email Backend
