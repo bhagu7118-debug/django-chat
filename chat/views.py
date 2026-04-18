@@ -34,10 +34,18 @@ def index(request):
 # 3. THE ROOM: Anyone logged in can join
 @login_required
 def room(request, slug):
+    # 1. Find the room based on the URL slug
     room = Room.objects.get(slug=slug)
-    messages = room.messages.all()[0:50] 
-    return render(request, 'chat/room.html', {'room': room, 'messages': messages})
+    
+    # 2. Fetch the last 25 messages for this specific room
+    # Because of your Meta ordering, they will come in the correct order
+    messages = Message.objects.filter(room=room)[:25]
 
+    # 3. Pass those messages to the room.html template
+    return render(request, 'chat/room.html', {
+        'room': room,
+        'messages': messages
+    })
 # 4. REGISTRATION: Standard for everyone
 def register(request):
     if request.method == 'POST':

@@ -13,6 +13,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
         # Join the room group
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
+        # WELCOME LOGIC: Broadcast a join notification to the room
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'chat_message',
+                'message': f'{self.user.username} has joined the room!',
+                'username': 'System' 
+            }
+        )
 
         if self.user.is_authenticated:
             # 1. Tell everyone I joined (updates their "Online Users" list)

@@ -20,12 +20,14 @@
     <div class="container">
         <div class="chat-section">
             <div id="chat-log">
-                {% for message in messages %}
-                <div class="message" data-id="{{ message.id }}">
-                    <strong>{{ message.user.username }}</strong>: {{ message.content }}
-                </div>
+                {% for m in messages %}
+                   <div class="message {% if m.user == request.user %}sent{% else %}received{% endif %}">
+                       <span class="message-user">{{ m.user.username }}</span>
+                       {{ m.content }}
+                   </div>
                 {% endfor %}
-            </div>
+                </div>
+                
             <div class="input-area">
                 <input id="chat-message-input" type="text" placeholder="Type a message..." autocomplete="off">
                 <button id="chat-message-submit">Send</button>
