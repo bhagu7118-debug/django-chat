@@ -79,3 +79,20 @@ Week 5 focused on transforming the static chat interface into a fully dynamic, r
 * **Frontend**: Vanilla JavaScript, WebSocket API, HTML5/CSS3.
 * **Backend**: Django Channels, Daphne ASGI server.
 * **Data Format**: JSON.
+
+# Week 6: Storing Chat History
+
+## 🌟 Milestone Task
+* **Task:** Integrate database logic to save chat messages for persistence, allowing users to see past conversations.
+
+## 🛠️ Key Technical Implementations
+
+* **Framework ORM Persistence:** Utilized the Django ORM to securely store every transmitted message into the database. This ensures that conversations are no longer ephemeral and can be retrieved at any time.
+* **Asynchronous Database Access:** Implemented `database_sync_to_async` within the WebSocket consumers. This allows the application to perform database "write" operations without blocking the asynchronous chat server, maintaining a lag-free user experience.
+* **Historical Data Retrieval:** Configured the room view to query the database using the ORM when a user first enters. This loads past messages into the chat window dynamically before the live connection takes over.
+* **Real-Time System Notifications:** Added logic to broadcast an automated greeting whenever a new user joins a room, improving the interactive feel of the interface.
+
+## 💻 Reference Materials Applied
+* **Django ORM:** For model querying and data persistence.
+* **Channels Database Sync:** For safe asynchronous database handling.
+* **Meta Ordering:** For ensuring historical messages appear in the correct chronological sequence.
