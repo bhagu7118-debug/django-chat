@@ -10,11 +10,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.room_group_name = f"chat_{self.room_name}"
         self.user = self.scope["user"]
 
+        # Join the room group
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
         if self.user.is_authenticated:
-            # 1. Tell everyone I joined
+            # 1. Tell everyone I joined (updates their "Online Users" list)
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -23,7 +24,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     'status': 'online'
                 }
             )
-            # 2. Ask everyone already in the room to identify themselves
+            # 2. Ask others to identify themselves to populate my local list
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -34,6 +35,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         if self.user.is_authenticated:
+            # Tell everyone I left
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -48,10 +50,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
         data = json.loads(text_data)
         action_type = data.get('type', 'chat_message')
 
+        # Handle sending a new message
         if action_type == 'chat_message':
             message = data['message']
+            # Save to Database using helper method below
             msg_obj = await self.save_message(self.user.username, self.room_name, message)
             
+            # Broadcast to everyone in the room
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -62,6 +67,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 }
             )
         
+        # Handle editing an existing message (Advanced)
         elif action_type == 'edit_message':
             msg_id = data['msg_id']
             new_content = data['message']
@@ -76,7 +82,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 }
             )
 
-        # When I receive a roll call request, I send my status back
+        # Response to a Roll Call (keeps the online list accurate)
         elif action_type == 'user_list_response':
             await self.channel_layer.group_send(
                 self.room_group_name,
@@ -87,6 +93,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 }
             )
 
+    # These methods send the events to the JavaScript "onmessage" function
     async def chat_message(self, event):
         await self.send(text_data=json.dumps(event))
 
@@ -97,9 +104,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(event))
 
     async def user_list_request(self, event):
-        # We send the request to the frontend so the JS can trigger a response
         await self.send(text_data=json.dumps(event))
 
+    # Database helper methods
     @database_sync_to_async
     def save_message(self, username, room_slug, message):
         user = User.objects.get(username=username)
@@ -108,4 +115,5 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def update_message_db(self, msg_id, content):
+        # Ensures only the owner of the message can edit it
         Message.objects.filter(id=msg_id, user=self.user).update(content=content)

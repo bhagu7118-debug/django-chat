@@ -62,3 +62,20 @@ This week focused on hardening the security and accessibility of the real-time c
 * **Backend**: Django 6.0.3
 * **Real-time**: Django Channels & Daphne
 * **Auth**: Django contrib auth with custom Email Backend
+
+# Week 5: Frontend UI & Real-Time Messaging
+
+## 🚀 Project Overview
+Week 5 focused on transforming the static chat interface into a fully dynamic, real-time experience. By implementing the WebSocket API and JavaScript DOM manipulation, the application now supports instant message broadcasting and user presence tracking without requiring page reloads.
+
+## 🛠️ Key Features
+* **WebSocket API Integration**: Established a persistent bi-directional connection between the client and the Django Channels server to handle real-time data flow.
+* **Dynamic UI Updates**: Leveraged JavaScript DOM manipulation (`document.createElement`, `appendChild`) to inject new messages into the chat log instantly.
+* **Real-Time Roll Call**: Implemented an automated "Online Users" sidebar that updates dynamically as users join or leave the room.
+* **Asynchronous Communication**: Utilized `JSON.parse()` and `JSON.stringify()` to manage data packets, ensuring seamless communication between the frontend and the backend consumer.
+* **UX Enhancements**: Integrated automatic scrolling to the latest message and instant input clearing to maintain a modern chat experience.
+
+## 📚 Technical Reference
+* **Frontend**: Vanilla JavaScript, WebSocket API, HTML5/CSS3.
+* **Backend**: Django Channels, Daphne ASGI server.
+* **Data Format**: JSON.

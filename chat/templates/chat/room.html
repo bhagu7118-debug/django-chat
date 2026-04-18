@@ -1,132 +1,99 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>{{ room.name }} - Chat Room</title>
+    <meta charset="utf-8"/>
+    <title>Chat Room: {{ room.name }}</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; height: 100vh; margin: 0; background-color: #f0f2f5; }
-        #sidebar { width: 240px; background: #2c3e50; color: white; padding: 20px; box-shadow: 2px 0 5px rgba(0,0,0,0.1); }
-        #chat-container { flex-grow: 1; display: flex; flex-direction: column; padding: 20px; }
-        #chat-log { flex-grow: 1; border-radius: 8px; border: 1px solid #ddd; padding: 15px; overflow-y: auto; background: #fff; margin-bottom: 10px; }
-        .input-area { display: flex; gap: 10px; }
-        #chat-message-input { flex-grow: 1; padding: 12px; border-radius: 20px; border: 1px solid #ccc; outline: none; }
-        #chat-message-submit { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 20px; cursor: pointer; }
-        .user-online { color: #2ecc71; font-weight: bold; margin-bottom: 8px; }
-        .edit-btn { font-size: 0.7em; color: #007bff; cursor: pointer; margin-left: 10px; background: none; border: none; }
-        .message-item { margin-bottom: 10px; padding: 5px; border-bottom: 1px solid #f9f9f9; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: auto; display: flex; gap: 20px; height: 80vh; }
+        .chat-section { flex: 3; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .sidebar { flex: 1; background: #343a40; color: white; border-radius: 10px; padding: 20px; }
+        
+        #chat-log { flex-grow: 1; padding: 20px; overflow-y: auto; background: #e5ddd5; display: flex; flex-direction: column; gap: 10px; }
+        .message { background: white; padding: 10px 15px; border-radius: 15px; max-width: 80%; align-self: flex-start; }
+        .input-area { padding: 15px; background: #f0f0f0; display: flex; gap: 10px; border-radius: 0 0 10px 10px; }
+        #user-list { list-style: none; padding: 0; }
+        .user-online { color: #28a745; margin-bottom: 5px; font-size: 0.9em; }
     </style>
 </head>
 <body>
-    <div id="sidebar">
-        <h3>Online Users</h3>
-        <div id="user-list"></div>
-        <hr>
-        <a href="{% url 'index' %}" style="color: #3498db; text-decoration: none;">← Back to Lobby</a>
+    <div class="container">
+        <div class="chat-section">
+            <div id="chat-log">
+                {% for message in messages %}
+                <div class="message" data-id="{{ message.id }}">
+                    <strong>{{ message.user.username }}</strong>: {{ message.content }}
+                </div>
+                {% endfor %}
+            </div>
+            <div class="input-area">
+                <input id="chat-message-input" type="text" placeholder="Type a message..." autocomplete="off">
+                <button id="chat-message-submit">Send</button>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <h3>Online Users</h3>
+            <ul id="user-list"></ul>
+        </div>
     </div>
 
-    <div id="chat-container">
-        <h2>Room: {{ room.name }}</h2>
-        <div id="chat-log">
-            {% for message in messages %}
-                <div class="message-item" id="msg-{{ message.id }}">
-                    <strong>{{ message.user.username }}</strong>: 
-                    <span class="content">{{ message.content }}</span>
-                    {% if message.user == request.user %}
-                        <button class="edit-btn" onclick="editMsg({{ message.id }})">Edit</button>
-                    {% endif %}
-                </div>
-            {% endfor %}
-        </div>
-        
-        <div class="input-area">
-            <input id="chat-message-input" type="text" placeholder="Type a message...">
-            <button id="chat-message-submit">Send</button>
-        </div>
-    </div>
+    {{ room.slug|json_script:"room-name" }}
+    {{ request.user.username|json_script:"user-name" }}
 
     <script>
-        const roomSlug = "{{ room.slug }}";
-        const userName = "{{ request.user.username }}";
+        const roomName = JSON.parse(document.getElementById('room-name').textContent);
+        const userName = JSON.parse(document.getElementById('user-name').textContent);
+        const userList = {}; // To track online users locally
 
-        const chatSocket = new WebSocket(
-            'ws://' + window.location.host + '/ws/chat/' + roomSlug + '/'
-        );
+        const chatSocket = new WebSocket('ws://' + window.location.host + '/ws/chat/' + roomName + '/');
 
         chatSocket.onmessage = function(e) {
             const data = JSON.parse(e.data);
-            
-            // 1. Handle Chat Messages
+
+            // Handle standard chat messages
             if (data.type === 'chat_message') {
-                const log = document.querySelector('#chat-log');
-                let editHtml = (data.username === userName) ? ` <button class="edit-btn" onclick="editMsg(${data.msg_id})">Edit</button>` : '';
-                
-                log.innerHTML += `
-                    <div class="message-item" id="msg-${data.msg_id}">
-                        <strong>${data.username}</strong>: <span class="content">${data.message}</span>${editHtml}
-                    </div>`;
-                log.scrollTop = log.scrollHeight;
-            }
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message';
+                messageDiv.innerHTML = `<strong>${data.username}</strong>: ${data.message}`;
+                document.querySelector('#chat-log').appendChild(messageDiv);
+                document.querySelector('#chat-log').scrollTop = document.querySelector('#chat-log').scrollHeight;
+            } 
             
-            // 2. Handle Message Edits
-            else if (data.type === 'message_edited') {
-                const msgSpan = document.querySelector(`#msg-${data.msg_id} .content`);
-                if (msgSpan) {
-                    msgSpan.innerText = data.message + " (edited)";
-                    msgSpan.style.fontStyle = "italic";
-                }
-            }
-            
-            // 3. Handle User Status (Sidebar Sync)
-            else if (data.status) {
-                const userList = document.querySelector('#user-list');
-                const existingUser = document.querySelector(`#user-${data.username}`);
-                
-                if (data.status === 'online') {
-                    if (!existingUser) {
-                        userList.innerHTML += `<div id="user-${data.username}" class="user-online">● ${data.username}</div>`;
-                    }
-                } else if (data.status === 'offline' && existingUser) {
-                    existingUser.remove();
-                }
+            // Handle Roll Call (User status updates)
+            else if (data.type === 'user_status') {
+                userList[data.username] = data.status;
+                updateUserListUI();
             }
 
-            // 4. Handle Roll Call Request
+            // Handle List Requests (When a new person joins and asks "Who is here?")
             else if (data.type === 'user_list_request') {
-                // If someone else joins, I tell them I'm here
-                if (data.requester !== userName) {
-                    chatSocket.send(JSON.stringify({
-                        'type': 'user_list_response'
-                    }));
-                }
+                chatSocket.send(JSON.stringify({
+                    'type': 'user_list_response'
+                }));
             }
         };
 
-        function editMsg(id) {
-            const currentText = document.querySelector(`#msg-${id} .content`).innerText;
-            // Clean up "(edited)" tag if it exists before editing
-            const cleanText = currentText.replace(" (edited)", "");
-            const newMsg = prompt("Edit your message:", cleanText);
-            if (newMsg && newMsg !== cleanText) {
-                chatSocket.send(JSON.stringify({
-                    'type': 'edit_message',
-                    'msg_id': id,
-                    'message': newMsg
-                }));
+        function updateUserListUI() {
+            const listElement = document.querySelector('#user-list');
+            listElement.innerHTML = '';
+            for (const [user, status] of Object.entries(userList)) {
+                if (status === 'online') {
+                    const li = document.createElement('li');
+                    li.className = 'user-online';
+                    li.textContent = `● ${user}`;
+                    listElement.appendChild(li);
+                }
             }
         }
 
         document.querySelector('#chat-message-submit').onclick = function(e) {
-            const input = document.querySelector('#chat-message-input');
-            if (input.value.trim() !== '') {
-                chatSocket.send(JSON.stringify({ 
-                    'type': 'chat_message',
-                    'message': input.value 
-                }));
-                input.value = '';
-            }
-        };
-
-        document.querySelector('#chat-message-input').onkeyup = function(e) {
-            if (e.keyCode === 13) document.querySelector('#chat-message-submit').click();
+            const inputDom = document.querySelector('#chat-message-input');
+            chatSocket.send(JSON.stringify({
+                'type': 'chat_message',
+                'message': inputDom.value
+            }));
+            inputDom.value = '';
         };
     </script>
 </body>
