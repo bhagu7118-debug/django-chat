@@ -96,3 +96,44 @@ Week 5 focused on transforming the static chat interface into a fully dynamic, r
 * **Django ORM:** For model querying and data persistence.
 * **Channels Database Sync:** For safe asynchronous database handling.
 * **Meta Ordering:** For ensuring historical messages appear in the correct chronological sequence.
+
+# 🚀 Django Real-Time Chat App - Week 7
+
+## 🌟 Overview
+Week 7 was the most significant milestone in this project's development. I transitioned the application from a basic message-storing site into a **fully dynamic, real-time communication platform**. By leveraging **WebSockets** and **Django Channels**, the app now mimics modern industry standards like WhatsApp or Slack.
+
+---
+
+## ✨ Key Accomplishments in Week 7
+
+### 🛠️ 1. Full Message Lifecycle (CRUD via WebSockets)
+* **Real-Time Deletion:** Users can now delete their own messages. Using the `delete_handler` in the backend, the message is removed from the database and instantly vanishes from every connected user's screen without a page refresh.
+* **In-Place Editing:** Implemented a secure editing feature. Users can update their message content, which broadcasts an `edit_handler` signal to sync the change across all active browsers.
+* **Security:** Added server-side checks to ensure only the original sender of a message has the permission to trigger edit or delete actions.
+
+### 👥 2. Dynamic User Presence (Online List)
+* **State Tracking:** Implemented a "Roll Call" protocol. When a user joins, a signal is sent to everyone else to "identify themselves," allowing the new joiner to see an accurate list of who is already online.
+* **Join/Leave Notifications:** Real-time updates to the sidebar when users connect or disconnect from the room.
+
+### ⌨️ 3. Typing Indicators
+* **Live Feedback:** Added a "User is typing..." feature. 
+* **Smart Throttling:** Used JavaScript timers to ensure the indicator automatically clears after 1 second of inactivity, providing a smooth and responsive UX.
+
+### 🏗️ 4. Technical Architecture: The "Handler Pattern"
+* Restructured `consumers.py` to use an explicit **Handler Pattern**. This separates the logic of receiving data from the logic of pushing it back to the client, making the code much more scalable and preventing data-loss errors.
+
+---
+
+## 🛠️ Technical Stack Used
+* **Backend:** Python 3.x, Django 5.x
+* **Real-Time:** Django Channels, Daphne (ASGI), WebSockets
+* **Database:** SQLite (Local) / PostgreSQL (Ready)
+* **Frontend:** JavaScript (ES6+), HTML5, CSS3
+
+---
+
+## 🚀 How to Run Locally
+
+1. **Clone the repository:**
+   ```bash
+   git clone <your-repo-link>

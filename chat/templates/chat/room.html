@@ -8,32 +8,41 @@
         .container { max-width: 900px; margin: auto; display: flex; gap: 20px; height: 80vh; }
         .chat-section { flex: 3; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
         .sidebar { flex: 1; background: #343a40; color: white; border-radius: 10px; padding: 20px; }
-        
         #chat-log { flex-grow: 1; padding: 20px; overflow-y: auto; background: #e5ddd5; display: flex; flex-direction: column; gap: 10px; }
-        .message { background: white; padding: 10px 15px; border-radius: 15px; max-width: 80%; align-self: flex-start; }
-        .input-area { padding: 15px; background: #f0f0f0; display: flex; gap: 10px; border-radius: 0 0 10px 10px; }
-        #user-list { list-style: none; padding: 0; }
-        .user-online { color: #28a745; margin-bottom: 5px; font-size: 0.9em; }
+        .message { background: white; padding: 10px 15px; border-radius: 15px; max-width: 80%; align-self: flex-start; position: relative; }
+        .sent { align-self: flex-end; background: #dcf8c6; }
+        .message-user { display: block; font-weight: bold; font-size: 0.8em; color: #555; }
+        .message-actions { font-size: 0.7em; cursor: pointer; margin-top: 5px; color: blue; }
+        #typing-indicator { font-style: italic; color: #888; font-size: 0.8em; padding: 5px 20px; min-height: 20px; }
+        .input-area { padding: 15px; background: #f0f0f0; display: flex; gap: 10px; }
+        #chat-message-input { flex-grow: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc; }
+        #chat-message-submit { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        .user-online { color: #28a745; list-style: none; padding: 5px 0; border-bottom: 1px solid #444; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="chat-section">
+            <h1 style="text-align: center; font-size: 1.2em; padding: 10px;">REAL TIME CHAT</h1>
             <div id="chat-log">
                 {% for m in messages %}
-                   <div class="message {% if m.user == request.user %}sent{% else %}received{% endif %}">
-                       <span class="message-user">{{ m.user.username }}</span>
-                       {{ m.content }}
-                   </div>
-                {% endfor %}
+                <div class="message {% if m.user == request.user %}sent{% else %}received{% endif %}" id="msg-{{ m.id }}">
+                    <span class="message-user">{{ m.user.username }}</span>
+                    <span class="content">{{ m.content }}</span>
+                    {% if m.user == request.user %}
+                    <div class="message-actions">
+                        <span onclick="editMsg({{ m.id }})">Edit</span> | <span onclick="deleteMsg({{ m.id }})">Delete</span>
+                    </div>
+                    {% endif %}
                 </div>
-                
+                {% endfor %}
+            </div>
+            <div id="typing-indicator"></div>
             <div class="input-area">
-                <input id="chat-message-input" type="text" placeholder="Type a message..." autocomplete="off">
+                <input id="chat-message-input" type="text" placeholder="Type a message...">
                 <button id="chat-message-submit">Send</button>
             </div>
         </div>
-
         <div class="sidebar">
             <h3>Online Users</h3>
             <ul id="user-list"></ul>
@@ -46,56 +55,79 @@
     <script>
         const roomName = JSON.parse(document.getElementById('room-name').textContent);
         const userName = JSON.parse(document.getElementById('user-name').textContent);
-        const userList = {}; // To track online users locally
+        const userList = {};
 
         const chatSocket = new WebSocket('ws://' + window.location.host + '/ws/chat/' + roomName + '/');
 
         chatSocket.onmessage = function(e) {
             const data = JSON.parse(e.data);
 
-            // Handle standard chat messages
             if (data.type === 'chat_message') {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = 'message';
-                messageDiv.innerHTML = `<strong>${data.username}</strong>: ${data.message}`;
-                document.querySelector('#chat-log').appendChild(messageDiv);
+                const div = document.createElement('div');
+                const isMe = data.username === userName;
+                div.className = `message ${isMe ? 'sent' : 'received'}`;
+                div.id = `msg-${data.msg_id}`;
+                div.innerHTML = `<span class="message-user">${data.username}</span><span class="content">${data.message}</span>`;
+                if(isMe) div.innerHTML += `<div class="message-actions"><span onclick="editMsg(${data.msg_id})">Edit</span> | <span onclick="deleteMsg(${data.msg_id})">Delete</span></div>`;
+                document.querySelector('#chat-log').appendChild(div);
                 document.querySelector('#chat-log').scrollTop = document.querySelector('#chat-log').scrollHeight;
             } 
-            
-            // Handle Roll Call (User status updates)
+            else if (data.type === 'user_typing') {
+                document.querySelector('#typing-indicator').textContent = (data.is_typing && data.username !== userName) ? `${data.username} is typing...` : '';
+            }
+            else if (data.type === 'message_edited') {
+                const msg = document.querySelector(`#msg-${data.msg_id} .content`);
+                if(msg) msg.textContent = data.message;
+            }
+            else if (data.type === 'message_deleted') {
+                const msg = document.querySelector(`#msg-${data.msg_id}`);
+                if(msg) msg.remove();
+            }
             else if (data.type === 'user_status') {
                 userList[data.username] = data.status;
-                updateUserListUI();
+                updateUI();
             }
-
-            // Handle List Requests (When a new person joins and asks "Who is here?")
             else if (data.type === 'user_list_request') {
-                chatSocket.send(JSON.stringify({
-                    'type': 'user_list_response'
-                }));
+                chatSocket.send(JSON.stringify({'type': 'user_list_response'}));
             }
         };
 
-        function updateUserListUI() {
-            const listElement = document.querySelector('#user-list');
-            listElement.innerHTML = '';
+        function updateUI() {
+            const list = document.querySelector('#user-list');
+            list.innerHTML = '';
             for (const [user, status] of Object.entries(userList)) {
                 if (status === 'online') {
                     const li = document.createElement('li');
                     li.className = 'user-online';
                     li.textContent = `● ${user}`;
-                    listElement.appendChild(li);
+                    list.appendChild(li);
                 }
             }
         }
 
-        document.querySelector('#chat-message-submit').onclick = function(e) {
-            const inputDom = document.querySelector('#chat-message-input');
-            chatSocket.send(JSON.stringify({
-                'type': 'chat_message',
-                'message': inputDom.value
-            }));
-            inputDom.value = '';
+        function deleteMsg(id) {
+            if(confirm("Delete?")) chatSocket.send(JSON.stringify({'type': 'delete_message', 'msg_id': id}));
+        }
+
+        function editMsg(id) {
+            const current = document.querySelector(`#msg-${id} .content`).textContent;
+            const newVal = prompt("Edit message:", current);
+            if(newVal && newVal !== current) chatSocket.send(JSON.stringify({'type': 'edit_message', 'msg_id': id, 'message': newVal}));
+        }
+
+        document.querySelector('#chat-message-input').onkeyup = function(e) {
+            if (e.keyCode === 13) return;
+            chatSocket.send(JSON.stringify({'type': 'typing', 'is_typing': true}));
+            clearTimeout(window.typingTimer);
+            window.typingTimer = setTimeout(() => chatSocket.send(JSON.stringify({'type': 'typing', 'is_typing': false})), 1000);
+        };
+
+        document.querySelector('#chat-message-submit').onclick = function() {
+            const inp = document.querySelector('#chat-message-input');
+            if(inp.value.trim()) {
+                chatSocket.send(JSON.stringify({'type': 'chat_message', 'message': inp.value}));
+                inp.value = '';
+            }
         };
     </script>
 </body>

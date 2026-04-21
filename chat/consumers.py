@@ -10,21 +10,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.room_group_name = f"chat_{self.room_name}"
         self.user = self.scope["user"]
 
-        # Join the room group
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
-        # WELCOME LOGIC: Broadcast a join notification to the room
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                'type': 'chat_message',
-                'message': f'{self.user.username} has joined the room!',
-                'username': 'System' 
-            }
-        )
 
+        # Notify others someone joined
         if self.user.is_authenticated:
-            # 1. Tell everyone I joined (updates their "Online Users" list)
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -33,7 +23,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     'status': 'online'
                 }
             )
-            # 2. Ask others to identify themselves to populate my local list
+            # Request status from others already in the room
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -44,7 +34,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         if self.user.is_authenticated:
-            # Tell everyone I left
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -57,41 +46,52 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data):
         data = json.loads(text_data)
-        action_type = data.get('type', 'chat_message')
+        action_type = data.get('type')
 
-        # Handle sending a new message
         if action_type == 'chat_message':
             message = data['message']
-            # Save to Database using helper method below
             msg_obj = await self.save_message(self.user.username, self.room_name, message)
-            
-            # Broadcast to everyone in the room
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
-                    'type': 'chat_message',
+                    'type': 'chat_message_handler',
                     'message': message,
                     'username': self.user.username,
                     'msg_id': msg_obj.id 
                 }
             )
         
-        # Handle editing an existing message (Advanced)
-        elif action_type == 'edit_message':
-            msg_id = data['msg_id']
-            new_content = data['message']
-            await self.update_message_db(msg_id, new_content)
-            
+        elif action_type == 'typing':
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
-                    'type': 'message_edited',
-                    'msg_id': msg_id,
-                    'message': new_content
+                    'type': 'typing_handler',
+                    'username': self.user.username,
+                    'is_typing': data['is_typing']
                 }
             )
 
-        # Response to a Roll Call (keeps the online list accurate)
+        elif action_type == 'edit_message':
+            await self.update_message_db(data['msg_id'], data['message'])
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'edit_handler',
+                    'msg_id': data['msg_id'],
+                    'message': data['message']
+                }
+            )
+
+        elif action_type == 'delete_message':
+            await self.delete_message_db(data['msg_id'])
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'delete_handler',
+                    'msg_id': data['msg_id']
+                }
+            )
+
         elif action_type == 'user_list_response':
             await self.channel_layer.group_send(
                 self.room_group_name,
@@ -102,20 +102,42 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 }
             )
 
-    # These methods send the events to the JavaScript "onmessage" function
-    async def chat_message(self, event):
-        await self.send(text_data=json.dumps(event))
+    # --- CRITICAL: EVENT HANDLERS TO SEND DATA TO BROWSERS ---
+    async def chat_message_handler(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'chat_message',
+            'message': event['message'],
+            'username': event['username'],
+            'msg_id': event['msg_id']
+        }))
+
+    async def typing_handler(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'user_typing',
+            'username': event['username'],
+            'is_typing': event['is_typing']
+        }))
+
+    async def edit_handler(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'message_edited',
+            'msg_id': event['msg_id'],
+            'message': event['message']
+        }))
+
+    async def delete_handler(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'message_deleted',
+            'msg_id': event['msg_id']
+        }))
 
     async def user_status(self, event):
-        await self.send(text_data=json.dumps(event))
-
-    async def message_edited(self, event):
         await self.send(text_data=json.dumps(event))
 
     async def user_list_request(self, event):
         await self.send(text_data=json.dumps(event))
 
-    # Database helper methods
+    # --- Database Methods ---
     @database_sync_to_async
     def save_message(self, username, room_slug, message):
         user = User.objects.get(username=username)
@@ -124,5 +146,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def update_message_db(self, msg_id, content):
-        # Ensures only the owner of the message can edit it
         Message.objects.filter(id=msg_id, user=self.user).update(content=content)
+
+    @database_sync_to_async
+    def delete_message_db(self, msg_id):
+        Message.objects.filter(id=msg_id, user=self.user).delete()

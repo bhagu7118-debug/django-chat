@@ -1,9 +1,16 @@
+import os
 from pathlib import Path
+from decouple import config
+import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = 'django-insecure-your-secret-key-here'
-DEBUG = True
-ALLOWED_HOSTS = []
+
+# Security values pulled securely from the .env file
+SECRET_KEY = config('SECRET_KEY')
+DEBUG = config('DEBUG', default=False, cast=bool)
+
+# Allowed hosts updated to include Render's domain for deployment
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.render.com']
 
 INSTALLED_APPS = [
     'daphne',  # Must be at the top
@@ -45,11 +52,12 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'core.wsgi.application'
 
+# Updated for Deployment: Will use SQLite locally, but PostgreSQL on Render
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600
+    )
 }
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -73,12 +81,24 @@ LOGOUT_REDIRECT_URL = 'login'
 # The magic line: Prints the reset link to your VS Code Terminal
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# Channels configuration (already in your code)
+# Channels configuration
 ASGI_APPLICATION = 'core.asgi.application'
 
-# Real-time WebSockets
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
-    },
-}
+# Updated for Deployment: Real-time WebSockets logic
+if not DEBUG:
+    # When deployed (DEBUG=False), use Redis to handle heavy traffic
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [config('REDIS_URL', default='redis://127.0.0.1:6379')],
+            },
+        },
+    }
+else:
+    # When local (DEBUG=True in your .env), use memory to keep testing simple
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
